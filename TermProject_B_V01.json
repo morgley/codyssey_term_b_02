@@ -1,0 +1,469 @@
+{
+  "name": "TermProject_B_V01",
+  "nodes": [
+    {
+      "parameters": {
+        "numberInputs": 3
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        432,
+        48
+      ],
+      "id": "d1c1bbdc-bbe2-4688-a36f-5f62aefaa900",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        32
+      ],
+      "id": "5dca6cdf-a4e8-4475-808e-32057a154608",
+      "name": "Daily 09:00 Trigger"
+    },
+    {
+      "parameters": {
+        "url": "https://techcrunch.com/category/artificial-intelligence/feed/",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        208,
+        32
+      ],
+      "id": "79fda1a4-1166-4fb5-a14c-56532c0455d5",
+      "name": "Read Tech RSS 1",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "url": "https://www.technologyreview.com/feed/",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        208,
+        192
+      ],
+      "id": "57208a45-451e-40df-9fe2-435483c38cf7",
+      "name": "Read Tech RSS 2",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "jsCode": "// RSS 기사 중 AI 관련 뉴스만 필터링하고 최신 1건만 선택하는 코드\n\n// 1. AI 관련 키워드 목록\nconst keywords = [\n  'ai',\n  'artificial intelligence',\n  'generative ai',\n  'llm',\n  'large language model',\n  'chatgpt',\n  'openai',\n  'anthropic',\n  'google deepmind',\n  'machine learning',\n  'deep learning',\n  'agent',\n  'ai agent',\n  '인공지능',\n  '생성형 ai',\n  '머신러닝',\n  '딥러닝'\n];\n\n// 2. 간단한 문자열 해시 함수\n// 원문 링크를 기반으로 UniqueKey를 만들기 위해 사용\nfunction simpleHash(str) {\n  let hash = 0;\n\n  if (!str) return 'no-link';\n\n  for (let i = 0; i < str.length; i++) {\n    const char = str.charCodeAt(i);\n    hash = ((hash << 5) - hash) + char;\n    hash = hash & hash;\n  }\n\n  return 'news_' + Math.abs(hash).toString();\n}\n\n// 3. RSS에서 들어온 전체 아이템 가져오기\nconst items = $input.all();\n\n// 4. RSS 데이터 정리\nconst normalizedItems = items.map(item => {\n  const data = item.json;\n\n  const title = data.title || '';\n  const link = data.link || data.guid || '';\n  const pubDate = data.pubDate || data.isoDate || data.date || new Date().toISOString();\n\n  // RSS마다 본문 필드명이 다를 수 있으므로 여러 후보를 합침\n  const content = [\n    data.content,\n    data.contentSnippet,\n    data.description,\n    data.summary\n  ].filter(Boolean).join('\\n');\n\n  const searchText = `${title}\\n${content}`.toLowerCase();\n\n  return {\n    title,\n    link,\n    pubDate,\n    content,\n    searchText,\n    guid: data.guid || '',\n    source: data.creator || data.author || 'Tech RSS',\n    original: data\n  };\n});\n\n// 5. 키워드 포함 여부로 AI 관련 기사 필터링\nconst filteredItems = normalizedItems.filter(article => {\n  return keywords.some(keyword => article.searchText.includes(keyword.toLowerCase()));\n});\n\n// 6. AI 관련 기사가 없을 경우\n// 다음 노드에서 처리할 수 있도록 noNews 상태를 넘김\nif (filteredItems.length === 0) {\n  return [\n    {\n      json: {\n        noNews: true,\n        status: 'NoNews',\n        message: 'AI 관련 뉴스가 RSS에서 발견되지 않았습니다.',\n        checkedAt: new Date().toISOString()\n      }\n    }\n  ];\n}\n\n// 7. 최신순 정렬\nfilteredItems.sort((a, b) => {\n  return new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime();\n});\n\n// 8. 최신 기사 1건 선택\nconst selected = filteredItems[0];\n\n// 9. UniqueKey 생성\n// link가 있으면 link 기반, 없으면 guid 기반\nconst keySource = selected.link || selected.guid || selected.title;\nconst uniqueKey = simpleHash(keySource);\n\n// 10. 다음 노드로 넘길 데이터 구성\nreturn [\n  {\n    json: {\n      noNews: false,\n      status: 'Selected',\n      title: selected.title,\n      link: selected.link,\n      pubDate: selected.pubDate,\n      content: selected.content,\n      uniqueKey: uniqueKey,\n      source: selected.source,\n      keywordMatched: true,\n      selectedAt: new Date().toISOString()\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        656,
+        64
+      ],
+      "id": "11a288a3-3afc-4fd3-b36d-17ba382a8ab4",
+      "name": "Select One AI News"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "71e191cc-0abf-4f88-877c-175f8f035121",
+              "leftValue": "={{ $json.noNews }}",
+              "rightValue": "=true",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        880,
+        64
+      ],
+      "id": "a6254248-12ec-48ac-bfa9-7c3a4330108a",
+      "name": "IF - Has News?"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "value": "38d525e5-df75-801c-a985-fa1e2c86d6bf",
+          "mode": "list",
+          "cachedResultName": "뉴스 저장소",
+          "cachedResultUrl": "https://app.notion.com/p/38d525e5df75801ca985fa1e2c86d6bf"
+        },
+        "limit": 1,
+        "filterType": "manual",
+        "filters": {
+          "conditions": [
+            {
+              "key": "UniqueKey|rich_text",
+              "condition": "equals",
+              "richTextValue": "={{ $('Select One AI News').first().json.uniqueKey }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        1136,
+        48
+      ],
+      "id": "74291393-eda0-45cd-b38b-f2ebcabe909a",
+      "name": "Check Duplicate in Notion",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000,
+      "credentials": {
+        "notionApi": {
+          "id": "yjWSGiVX7nfgGYgA",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:11434/api/generate",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"qwen2.5:3b\",\n  \"system\": \"당신은 한국어 뉴스 요약 전문가입니다. 모든 답변은 반드시 한국어로만 작성하세요. 중국어와 영어는 사용하지 마세요.\",\n  \"prompt\": {{ JSON.stringify(\"다음 뉴스 기사를 반드시 한국어로만 요약하세요.\\n\\n[출력 형식]\\n요약:\\n1. \\n2. \\n3. \\n\\n핵심 키워드:\\n- \\n- \\n- \\n\\n제목: \" + ($('Select One AI News').item.json.title || \"\") + \"\\n\\n본문: \" + (($('Select One AI News').item.json.content || \"\").slice(0, 3000)) + \"\\n\\nURL: \" + ($('Select One AI News').item.json.link || \"\")) }},\n  \"stream\": false\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1632,
+        64
+      ],
+      "id": "a34974fe-e715-4545-967d-20cd6fcbdae7",
+      "name": "Summarize with Ollama",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000,
+      "credentials": {
+        "openAiApi": {
+          "id": "1K5DT8BLOG5MNe61",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const news = $('Select One AI News').first().json;\nconst ollama = $input.first().json;\n\n// Ollama 요약 결과\nconst summary = ollama.response || '요약 결과 없음';\n\n// Notion 텍스트 길이 제한 대비\nfunction truncate(text, max = 1900) {\n  if (!text) return '';\n  text = String(text);\n  return text.length > max ? text.slice(0, max) + '...' : text;\n}\n\n// 키워드 추출 시도\nfunction extractKeywords(text) {\n  const keywordSection = text.match(/핵심\\s*키워드[\\s\\S]*/);\n  if (!keywordSection) return '';\n\n  return keywordSection[0]\n    .split('\\n')\n    .map(line => line.replace(/^[-*\\d.\\s]+/, '').trim())\n    .filter(line => line && !line.includes('핵심'))\n    .slice(0, 5)\n    .join(', ');\n}\n\nreturn [\n  {\n    json: {\n      title: truncate(news.title, 200),\n      url: news.link || news.url || '',\n      source: news.source || news.feedTitle || 'RSS',\n      publishedAt: news.pubDate || news.isoDate || news.publishedAt || new Date().toISOString(),\n      summary: truncate(summary, 1900),\n      keywords: extractKeywords(summary),\n      originalContent: truncate(news.content || news.contentSnippet || news.description || '', 1900),\n\n      // 중요: 중복 확인용 키를 반드시 넘겨야 함\n      uniqueKey: news.uniqueKey || '',\n\n      // 저장 상태\n      status: 'Saved',\n\n      createdAt: new Date().toISOString()\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1872,
+        64
+      ],
+      "id": "82ee1662-40ad-43ae-ab5c-8fe9994b4fb6",
+      "name": "Prepare Notion Data "
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "databaseId": {
+          "__rl": true,
+          "value": "38d525e5-df75-801c-a985-fa1e2c86d6bf",
+          "mode": "list",
+          "cachedResultName": "뉴스 저장소",
+          "cachedResultUrl": "https://app.notion.com/p/38d525e5df75801ca985fa1e2c86d6bf"
+        },
+        "title": "={{ String($json.title || '제목 없음') }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "요약|rich_text",
+              "textContent": "={{ String($json.summary || '').slice(0, 1900) }}"
+            },
+            {
+              "key": "원문링크|url",
+              "urlValue": "={{ String($json.url || '') }}"
+            },
+            {
+              "key": "발행일시|date",
+              "date": "={{ $json.publishedAt || $json.createdAt }}"
+            },
+            {
+              "key": "UniqueKey|rich_text",
+              "textContent": "={{ String($json.uniqueKey || '') }}"
+            },
+            {
+              "key": "Source|rich_text",
+              "textContent": "={{ String($json.source || '') }}"
+            },
+            {
+              "key": "CreatedAt|date",
+              "date": "={{ $json.createdAt }}"
+            },
+            {
+              "key": "Status|select",
+              "selectValue": "={{ String($json.status || 'Saved') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        2080,
+        64
+      ],
+      "id": "a1a98785-36ea-4e38-8ede-b733cff45bfe",
+      "name": "Save News to Notion",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000,
+      "credentials": {
+        "notionApi": {
+          "id": "yjWSGiVX7nfgGYgA",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://feeds.feedburner.com/geeknews-feed",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        208,
+        352
+      ],
+      "id": "60e83b1a-d1b4-4495-8b51-2f0a23dd3012",
+      "name": "Read Tech RSS 3",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "dbaff10e-f472-4c41-bfd9-c918c656d2ca",
+              "leftValue": "={{ !!$json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1344,
+        48
+      ],
+      "id": "753c41e4-c10e-43d3-a31e-740648be54b2",
+      "name": "IF - Is Duplicate?"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Select One AI News",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily 09:00 Trigger": {
+      "main": [
+        [
+          {
+            "node": "Read Tech RSS 1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Read Tech RSS 2",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Read Tech RSS 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Tech RSS 1": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Tech RSS 2": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Select One AI News": {
+      "main": [
+        [
+          {
+            "node": "IF - Has News?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - Has News?": {
+      "main": [
+        [
+          {
+            "node": "Check Duplicate in Notion",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Check Duplicate in Notion": {
+      "main": [
+        [
+          {
+            "node": "IF - Is Duplicate?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarize with Ollama": {
+      "main": [
+        [
+          {
+            "node": "Prepare Notion Data ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Notion Data ": {
+      "main": [
+        [
+          {
+            "node": "Save News to Notion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Tech RSS 3": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "IF - Is Duplicate?": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Summarize with Ollama",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "b9f4062d-8cd5-4ab9-8c6f-41297b650418",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "67ed1ae986542745275200b851f62efddbfaa6cb7e2db6ffc57ec163d48f290b"
+  },
+  "nodeGroups": [],
+  "id": "DBvmABKIL4xcUBri",
+  "tags": []
+}
